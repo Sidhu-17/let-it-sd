@@ -1,8 +1,11 @@
-// Public Library - Add your song filenames here!
-// Place songs in the 'music' folder.
+// Public Library - Songs here are visible to EVERYONE visiting your site.
+// To add: Upload to 'music' folder on GitHub and add entry here.
 const publicTracks = [
     // Example: { name: "Lost in Space", artist: "Nebula", url: "music/lost-in-space.mp3" },
 ];
+
+// NOTE: Songs uploaded by users via the UI are saved in THEIR OWN browser (IndexedDB).
+// They are NOT shared with other users. Only the songs in publicTracks are shared.
 
 const files = [];
 let currentTrackIndex = -1;
@@ -25,24 +28,6 @@ const trackArt = document.getElementById('trackArt');
 const trackCountEl = document.getElementById('trackCount');
 canvas = document.getElementById('visualizer');
 canvasCtx = canvas.getContext('2d');
-
-// Load Public Music
-function loadPublicMusic() {
-    publicTracks.forEach(track => {
-        files.push({
-            id: 'public-' + Math.random(),
-            name: track.name,
-            artist: track.artist,
-            url: track.url,
-            isPublic: true,
-            size: 'Public'
-        });
-    });
-    updateTrackList();
-    if (files.length > 0) loadTrack(0);
-}
-
-window.addEventListener('load', loadPublicMusic);
 
 // Initialize Visualizer
 function initVisualizer() {
@@ -79,7 +64,7 @@ function draw() {
         const g = 92;
         const b = 246;
 
-        canvasCtx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
+        canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
         canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
 
         x += barWidth + 1;
@@ -107,23 +92,77 @@ dropZone.addEventListener('drop', (e) => {
 const saveFilesBtn = document.getElementById('saveFilesBtn');
 let pendingFiles = [];
 
+// IndexedDB Setup for Persistent Storage
+const dbName = "LetItSD_DB";
+const storeName = "songs";
+let db;
+
+const request = indexedDB.open(dbName, 1);
+request.onupgradeneeded = (e) => {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: "id" });
+    }
+};
+request.onsuccess = (e) => {
+    db = e.target.result;
+    initApp();
+};
+
+async function initApp() {
+    // 1. Load Public Tracks first
+    publicTracks.forEach(track => {
+        files.push({
+            id: 'public-' + Math.random(),
+            name: track.name,
+            artist: track.artist,
+            url: track.url,
+            isPublic: true,
+            size: 'Public'
+        });
+    });
+
+    // 2. Load Saved Tracks from IndexedDB
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const getAllRequest = store.getAll();
+
+    getAllRequest.onsuccess = () => {
+        const savedTracks = getAllRequest.result;
+        savedTracks.forEach(track => {
+            files.push({
+                ...track,
+                url: URL.createObjectURL(track.blob)
+            });
+        });
+
+        updateTrackList();
+        if (files.length > 0 && currentTrackIndex === -1) {
+            loadTrack(0);
+        }
+    };
+}
+
 function handleFiles(selectedFiles) {
     if (!selectedFiles.length) return;
 
-    pendingFiles = Array.from(selectedFiles);
-    saveFilesBtn.style.display = 'inline-block';
+    pendingFiles = Array.from(selectedFiles).filter(file =>
+        file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a)$/i)
+    );
 
-    for (const file of selectedFiles) {
-        if (file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a)$/i)) {
-            const track = {
-                id: Date.now() + Math.random(),
-                name: file.name.replace(/\.[^/.]+$/, ""),
-                size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-                url: URL.createObjectURL(file),
-                file: file
-            };
-            files.push(track);
-        }
+    if (pendingFiles.length > 0) {
+        saveFilesBtn.style.display = 'inline-block';
+    }
+
+    for (const file of pendingFiles) {
+        const track = {
+            id: Date.now() + Math.random(),
+            name: file.name.replace(/\.[^/.]+$/, ""),
+            size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+            url: URL.createObjectURL(file),
+            file: file
+        };
+        files.push(track);
     }
     updateTrackList();
     if (currentTrackIndex === -1 && files.length > 0) {
@@ -131,31 +170,52 @@ function handleFiles(selectedFiles) {
     }
 }
 
-saveFilesBtn.addEventListener('click', () => {
-    alert("Songs added to session library! To make them public for your audience, upload them to the 'music' folder on GitHub.");
+saveFilesBtn.addEventListener('click', async () => {
+    for (const file of pendingFiles) {
+        await saveTrackToDB(file);
+    }
     saveFilesBtn.style.display = 'none';
+    alert("Songs saved permanently to your browser library! They will stay here even if you refresh.");
 });
 
+async function saveTrackToDB(trackFile) {
+    const track = {
+        id: Date.now() + Math.random(),
+        name: trackFile.name.replace(/\.[^/.]+$/, ""),
+        size: (trackFile.size / (1024 * 1024)).toFixed(2) + ' MB',
+        blob: trackFile,
+        timestamp: Date.now()
+    };
+
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).add(track);
+}
+
 function updateTrackList() {
-    trackCountEl.textContent = files.length + " tracks";
+    trackCountEl.textContent = `${files.length} tracks`;
     if (files.length === 0) {
         trackList.innerHTML = '<div class="empty-state"><p>Your library is empty</p></div>';
         return;
     }
 
-    trackList.innerHTML = files.map((track, index) => {
-        return '<div class="track-item ' + (index === currentTrackIndex ? 'active' : '') + '" onclick="loadTrack(' + index + ')">' +
-            '<i class="fa-solid ' + (index === currentTrackIndex && isPlaying ? 'fa-volume-high' : 'fa-play') + '"></i>' +
-            '<div class="track-info">' +
-                '<span class="t-name">' + track.name + '</span>' +
-                '<span class="t-size">' + track.size + '</span>' +
-            '</div>' +
-        '</div>';
-    }).join('');
+    trackList.innerHTML = files.map((track, index) => `
+        <div class="track-item ${index === currentTrackIndex ? 'active' : ''}" onclick="loadTrack(${index})">
+            <i class="fa-solid ${index === currentTrackIndex && isPlaying ? 'fa-volume-high' : 'fa-play'}"></i>
+            <div class="track-info">
+                <span class="t-name">${track.name}</span>
+                <span class="t-size">${track.size}</span>
+            </div>
+        </div>
+    `).join('');
 }
 
 function loadTrack(index) {
     if (index < 0 || index >= files.length) return;
+
+    // Revoke old URL if switching
+    if (currentTrackIndex !== -1 && files[currentTrackIndex].url) {
+        // Optional: URL.revokeObjectURL(files[currentTrackIndex].url);
+    }
 
     currentTrackIndex = index;
     const track = files[index];
@@ -231,5 +291,5 @@ function formatTime(seconds) {
     if (isNaN(seconds)) return "0:00";
     const min = Math.floor(seconds / 60);
     const sec = Math.floor(seconds % 60);
-    return min + ":" + (sec < 10 ? '0' : '') + sec;
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
 }

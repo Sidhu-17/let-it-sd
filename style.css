@@ -24,7 +24,7 @@ body {
     overflow-x: hidden;
     display: flex;
     justify-content: center;
-    align-items: center;
+    padding: 2rem 0;
 }
 
 /* Background Blobs */
@@ -300,7 +300,7 @@ header {
 
 .control-btn.primary:hover {
     background: var(--primary);
-    color: white;
+    color: rgb(103, 67, 67);
 }
 
 .volume-container {
@@ -422,4 +422,4 @@ header {
     .volume-container {
         display: none;
     }
-            }
+}
