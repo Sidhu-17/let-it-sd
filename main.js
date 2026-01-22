@@ -1,36 +1,8 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-
-/**
- * 🛰️ GLOBAL CLOUD CONFIGURATION
- * Paste your Firebase Config below to activate global sharing!
- */
-const firebaseConfig = {
-    apiKey: "PASTE_YOUR_API_KEY_HERE",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "...",
-    appId: "..."
-};
-
-// Initialize Firebase
-let db, storage;
-let isCloudActive = false;
-
-if (firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE") {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    storage = getStorage(app);
-    isCloudActive = true;
-}
-
-// Public Library (Hardcoded GitHub Tracks)
+// Public Library (Global Hits) - Songs added here are visible to EVERYONE.
+// To add: Upload your MP3 to the 'music' folder on GitHub and add an entry below.
 const publicTracks = [
-    // 🎵 ADD YOUR SONGS HERE TO SHARE WITH EVERYONE!
-    // Format: { name: "Song Name", artist: "Your Name", url: "music/your-file.mp3" },
     { name: "Welcome to Let It SD", artist: "System", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+    // Example: { name: "My New Hit", artist: "Sidhu", url: "music/hit.mp3" },
 ];
 
 const files = [];
@@ -170,11 +142,6 @@ async function initApp() {
 
     // 2. Load Private Saved Tracks (Only for the current user)
     loadSavedTracksFromDB();
-
-    // 3. Optional: Sync from Cloud (If you decide to add Firebase later)
-    if (isCloudActive) {
-        syncGlobalTracks();
-    }
 }
 
 function loadSavedTracksFromDB() {
@@ -201,28 +168,7 @@ function loadSavedTracksFromDB() {
     };
 }
 
-function syncGlobalTracks() {
-    const q = query(collection(db, "global_tracks"), orderBy("timestamp", "desc"));
-    onSnapshot(q, (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-            if (change.type === "added") {
-                const data = change.doc.data();
-                if (!files.find(f => f.id === change.doc.id)) {
-                    files.push({
-                        id: change.doc.id,
-                        name: data.name,
-                        artist: data.artist || 'Global User',
-                        url: data.url,
-                        isPublic: true,
-                        isHardcoded: false,
-                        size: data.size
-                    });
-                }
-            }
-        });
-        updateTrackList();
-    });
-}
+
 
 function handleFiles(selectedFiles) {
     if (!selectedFiles.length) return;
@@ -256,58 +202,15 @@ function handleFiles(selectedFiles) {
 }
 
 saveFilesBtn.addEventListener('click', async () => {
-    const choice = confirm("Do you want to share these songs GLOBALLY with the world?\n\n- OK: Share with everyone (Cloud)\n- Cancel: Keep private in this browser");
-
-    if (choice) {
-        if (!isCloudActive) {
-            alert("Firebase not configured! Please paste your config in main.js first.");
-            return;
-        }
-        for (const file of pendingFiles) {
-            await uploadToCloud(file);
-        }
-    } else {
-        for (const file of pendingFiles) {
-            await saveTrackToDB(file);
-        }
-        alert("Songs saved to your Private Storage.");
+    for (const file of pendingFiles) {
+        await saveTrackToDB(file);
     }
-
+    alert("Songs saved to your Private Storage! To make them Global for everyone, upload them to the 'music' folder on your GitHub.");
     saveFilesBtn.style.display = 'none';
     pendingFiles = [];
 });
 
-async function uploadToCloud(file) {
-    uploadOverlay.style.display = 'flex';
-    const storageRef = ref(storage, 'music/' + Date.now() + '_' + file.name);
-    const uploadTask = uploadBytesResumable(storageRef, file);
 
-    return new Promise((resolve, reject) => {
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                uploadProgressBar.style.width = progress + '%';
-                uploadStatus.textContent = `Uploading: ${Math.round(progress)}%`;
-            },
-            (error) => {
-                console.error(error);
-                uploadOverlay.style.display = 'none';
-                reject(error);
-            },
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                await addDoc(collection(db, "global_tracks"), {
-                    name: file.name.replace(/\.[^/.]+$/, ""),
-                    url: downloadURL,
-                    size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-                    timestamp: Date.now()
-                });
-                uploadOverlay.style.display = 'none';
-                resolve();
-            }
-        );
-    });
-}
 
 async function saveTrackToDB(trackFile) {
     const track = {
