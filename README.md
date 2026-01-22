@@ -1,22 +1,21 @@
-# Let it SD - Premium Music Player
+# Let it SD - Premium Music Experience
 
-A sleek, modern music player for the web with public audience support.
+### 🌍 How to Share Music with your Audience (Global Hits)
+To make a song appear for **everyone** who visits your site, follow these 3 steps:
 
-## Features
-- **Visualizer**: Real-time high-end audio visualizer.
-- **Public Library**: Auto-loads songs from the `/music` folder for your audience.
-- **User Uploads**: Support for drag-and-drop MP3/WAV files.
-- **Modern Interface**: Glassmorphism design with dynamic background blobs.
+1. **Upload the MP3:** Go to your GitHub repository and upload your audio file into the `music` folder.
+2. **Rename the file:** Make sure the file name is simple (e.g., `my-song.mp3`).
+3. **Update main.js:** 
+   - Open `main.js` on GitHub.
+   - Look for `const publicTracks`.
+   - Change the name, artist, and URL to match your file (e.g., `{ name: "My Hit", artist: "Sidhu", url: "music/my-song.mp3" }`).
 
-## How to make Music Public for your Audience
-1.  **Place your songs**: Open the `music` folder in `c:/sd/music/` and paste your MP3/WAV files there.
-2.  **Update the list**: Open `main.js` and find the `publicTracks` array at the top.
-3.  **Add your files**: Add an entry for each song like this:
-    ```javascript
-    const publicTracks = [
-        { name: "My Awesome Song", artist: "Artist Name", url: "music/my-song.mp3" },
-    ];
-    ```
-4.  **Re-upload**: Re-upload the whole folder to **Vercel** or **Cloudflare Pages**.
+Once you commit these changes, the song will appear in the **Global Hits** tab for everyone in the world!
 
-*Note: Your audience will now see and hear these songs as soon as they visit your site!*
+---
+
+### 🎨 Features
+- **High-End Visualizer**: Real-time audio frequency visualization.
+- **Private Storage**: Users can upload songs privately to their own browser.
+- **Glassmorphism**: A stunning, premium dark theme.
+- **Responsive**: Works on mobile and desktop.

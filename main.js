@@ -2,7 +2,7 @@
 // To add: Upload your MP3 to the 'music' folder on GitHub and add an entry below.
 const publicTracks = [
     { name: "Welcome to Let It SD", artist: "System", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-    // Example: { name: "My New Hit", artist: "Sidhu", url: "music/hit.mp3" },
+    { name: "My First Song", artist: "Sidhu", url: "music/my-song.mp3" },
 ];
 
 const files = [];
