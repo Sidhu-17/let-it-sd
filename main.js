@@ -1,13 +1,6 @@
-// Public Library - Add your song filenames here!
-// Place songs in the 'music' folder.
-const publicTracks = [
-    // Example: { name: "Lost in Space", artist: "Nebula", url: "music/lost-in-space.mp3" },
-];
-
 const files = [];
 let currentTrackIndex = -1;
 let isPlaying = false;
-let audioContext, analyser, dataArray, canvas, canvasCtx, animationId;
 
 // DOM Elements
 const audioElement = document.getElementById('audioElement');
@@ -23,68 +16,6 @@ const trackArtist = document.getElementById('trackArtist');
 const volumeBar = document.getElementById('volumeBar');
 const trackArt = document.getElementById('trackArt');
 const trackCountEl = document.getElementById('trackCount');
-canvas = document.getElementById('visualizer');
-canvasCtx = canvas.getContext('2d');
-
-// Load Public Music
-function loadPublicMusic() {
-    publicTracks.forEach(track => {
-        files.push({
-            id: 'public-' + Math.random(),
-            name: track.name,
-            artist: track.artist,
-            url: track.url,
-            isPublic: true,
-            size: 'Public'
-        });
-    });
-    updateTrackList();
-    if (files.length > 0) loadTrack(0);
-}
-
-window.addEventListener('load', loadPublicMusic);
-
-// Initialize Visualizer
-function initVisualizer() {
-    if (audioContext) return;
-
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaElementSource(audioElement);
-    analyser = audioContext.createAnalyser();
-
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
-
-    analyser.fftSize = 256;
-    const bufferLength = analyser.frequencyBinCount;
-    dataArray = new Uint8Array(bufferLength);
-
-    draw();
-}
-
-function draw() {
-    animationId = requestAnimationFrame(draw);
-    analyser.getByteFrequencyData(dataArray);
-
-    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const barWidth = (canvas.width / dataArray.length) * 2.5;
-    let barHeight;
-    let x = 0;
-
-    for (let i = 0; i < dataArray.length; i++) {
-        barHeight = dataArray[i] / 2;
-
-        const r = 139 + (i * 2);
-        const g = 92;
-        const b = 246;
-
-        canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
-        canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-
-        x += barWidth + 1;
-    }
-}
 
 // Handle File Selection
 fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
@@ -105,11 +36,8 @@ dropZone.addEventListener('drop', (e) => {
 });
 
 function handleFiles(selectedFiles) {
-    if (!selectedFiles.length) return;
-
     for (const file of selectedFiles) {
-        // More permissive file check
-        if (file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a)$/i)) {
+        if (file.type === 'audio/mpeg' || file.type === 'audio/wav' || file.name.endsWith('.mp3') || file.name.endsWith('.wav')) {
             const track = {
                 id: Date.now() + Math.random(),
                 name: file.name.replace(/\.[^/.]+$/, ""),
@@ -146,29 +74,20 @@ function updateTrackList() {
 
 function loadTrack(index) {
     if (index < 0 || index >= files.length) return;
-
-    // Revoke old URL if switching
-    if (currentTrackIndex !== -1 && files[currentTrackIndex].url) {
-        // Optional: URL.revokeObjectURL(files[currentTrackIndex].url);
-    }
-
+    
     currentTrackIndex = index;
     const track = files[index];
-
+    
     audioElement.src = track.url;
     trackTitle.textContent = track.name;
-    trackArtist.textContent = 'User Upload';
-
+    trackArtist.textContent = 'Uploaded Audio';
+    
     updateTrackList();
     playTrack();
 }
 
 function playTrack() {
-    initVisualizer();
-    if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume();
-    }
-    audioElement.play().catch(e => console.error("Playback failed:", e));
+    audioElement.play();
     isPlaying = true;
     playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
     trackArt.classList.add('playing');
@@ -189,18 +108,18 @@ playPauseBtn.addEventListener('click', () => {
 });
 
 document.getElementById('prevBtn').addEventListener('click', () => {
-    if (currentTrackIndex > 0) loadTrack(currentTrackIndex - 1);
+    loadTrack(currentTrackIndex - 1);
 });
 
 document.getElementById('nextBtn').addEventListener('click', () => {
-    if (currentTrackIndex < files.length - 1) loadTrack(currentTrackIndex + 1);
+    loadTrack(currentTrackIndex + 1);
 });
 
 // Audio Progress
 audioElement.addEventListener('timeupdate', () => {
     const progress = (audioElement.currentTime / audioElement.duration) * 100;
     progressBar.value = isFinite(progress) ? progress : 0;
-
+    
     currentTimeEl.textContent = formatTime(audioElement.currentTime);
     durationEl.textContent = formatTime(audioElement.duration);
 });
@@ -215,11 +134,7 @@ volumeBar.addEventListener('input', () => {
 });
 
 audioElement.addEventListener('ended', () => {
-    if (currentTrackIndex < files.length - 1) {
-        loadTrack(currentTrackIndex + 1);
-    } else {
-        pauseTrack();
-    }
+    loadTrack(currentTrackIndex + 1);
 });
 
 function formatTime(seconds) {
