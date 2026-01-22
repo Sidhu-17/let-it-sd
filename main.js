@@ -79,7 +79,7 @@ function draw() {
         const g = 92;
         const b = 246;
 
-        canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+        canvasCtx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
         canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
 
         x += barWidth + 1;
@@ -137,30 +137,25 @@ saveFilesBtn.addEventListener('click', () => {
 });
 
 function updateTrackList() {
-    trackCountEl.textContent = `${files.length} tracks`;
+    trackCountEl.textContent = files.length + " tracks";
     if (files.length === 0) {
         trackList.innerHTML = '<div class="empty-state"><p>Your library is empty</p></div>';
         return;
     }
 
-    trackList.innerHTML = files.map((track, index) => `
-        <div class="track-item ${index === currentTrackIndex ? 'active' : ''}" onclick="loadTrack(${index})">
-            <i class="fa-solid ${index === currentTrackIndex && isPlaying ? 'fa-volume-high' : 'fa-play'}"></i>
-            <div class="track-info">
-                <span class="t-name">${track.name}</span>
-                <span class="t-size">${track.size}</span>
-            </div>
-        </div>
-    `).join('');
+    trackList.innerHTML = files.map((track, index) => {
+        return '<div class="track-item ' + (index === currentTrackIndex ? 'active' : '') + '" onclick="loadTrack(' + index + ')">' +
+            '<i class="fa-solid ' + (index === currentTrackIndex && isPlaying ? 'fa-volume-high' : 'fa-play') + '"></i>' +
+            '<div class="track-info">' +
+                '<span class="t-name">' + track.name + '</span>' +
+                '<span class="t-size">' + track.size + '</span>' +
+            '</div>' +
+        '</div>';
+    }).join('');
 }
 
 function loadTrack(index) {
     if (index < 0 || index >= files.length) return;
-
-    // Revoke old URL if switching
-    if (currentTrackIndex !== -1 && files[currentTrackIndex].url) {
-        // Optional: URL.revokeObjectURL(files[currentTrackIndex].url);
-    }
 
     currentTrackIndex = index;
     const track = files[index];
@@ -236,5 +231,5 @@ function formatTime(seconds) {
     if (isNaN(seconds)) return "0:00";
     const min = Math.floor(seconds / 60);
     const sec = Math.floor(seconds % 60);
-    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    return min + ":" + (sec < 10 ? '0' : '') + sec;
 }
