@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
     <div class="background-blobs">
         <div class="blob blob-1"></div>
@@ -33,7 +35,11 @@
                     </div>
                     <h3>Upload Music</h3>
                     <p>Drag & drop your MP3 or WAV files here</p>
-                    <button class="btn-primary" onclick="document.getElementById('fileInput').click()">Browse Files</button>
+                    <button class="btn-primary" onclick="document.getElementById('fileInput').click()">Browse
+                        Files</button>
+                    <button class="btn-secondary" id="saveFilesBtn"
+                        style="display: none; margin-left: 10px; background: rgba(255,255,255,0.1); border: 1px solid var(--primary); color: white; padding: 12px 24px; border-radius: 12px; cursor: pointer;">Save
+                        to Library</button>
                 </div>
             </div>
         </section>
@@ -49,6 +55,10 @@
                 </div>
             </div>
 
+            <div class="visualizer-container">
+                <canvas id="visualizer"></canvas>
+            </div>
+
             <div class="player-controls">
                 <div class="progress-container">
                     <span id="currentTime">0:00</span>
@@ -57,14 +67,16 @@
                 </div>
 
                 <div class="main-controls">
-                    <button class="control-btn secondary" id="prevBtn"><i class="fa-solid fa-backward-step"></i></button>
+                    <button class="control-btn secondary" id="prevBtn"><i
+                            class="fa-solid fa-backward-step"></i></button>
                     <button class="control-btn primary" id="playPauseBtn"><i class="fa-solid fa-play"></i></button>
                     <button class="control-btn secondary" id="nextBtn"><i class="fa-solid fa-forward-step"></i></button>
                 </div>
 
                 <div class="volume-container">
                     <i class="fa-solid fa-volume-high"></i>
-                    <input type="range" id="volumeBar" min="0" max="1" step="0.01" value="0.7" class="slider volume-slider">
+                    <input type="range" id="volumeBar" min="0" max="1" step="0.01" value="0.7"
+                        class="slider volume-slider">
                 </div>
             </div>
         </section>
@@ -86,4 +98,5 @@
     <audio id="audioElement"></audio>
     <script src="main.js"></script>
 </body>
+
 </html>
