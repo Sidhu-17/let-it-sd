@@ -1,8 +1,9 @@
 // Public Library (Global Hits) - Songs added here are visible to EVERYONE.
 // To add: Upload your MP3 to the 'music' folder on GitHub and add an entry below.
 const publicTracks = [
-    { name: "Welcome to Let It SD", artist: "System", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-    { name: "My First Song", artist: "Sidhu", url: "music/my-song.mp3" },
+    { name: "Welcome Chill", artist: "Let It SD", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+    { name: "Ocean Waves", artist: "Nature", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+    { name: "Electronic Beats", artist: "Cyber", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
 ];
 
 const files = [];
@@ -202,12 +203,24 @@ function handleFiles(selectedFiles) {
 }
 
 saveFilesBtn.addEventListener('click', async () => {
+    // 1. Save to browser first
     for (const file of pendingFiles) {
         await saveTrackToDB(file);
     }
-    alert("Songs saved to your Private Storage! To make them Global for everyone, upload them to the 'music' folder on your GitHub.");
+
+    // 2. Offer to make it Global via GitHub
+    const willGlobalize = confirm("Songs saved to your computer! \n\nDo you want to push these songs to the 'GLOBAL' library so your audience can hear them?");
+
+    if (willGlobalize) {
+        // Open the GitHub upload page directly in a new tab
+        const githubUploadUrl = "https://github.com/Sidhu-17/let-it-sd/upload/main/music";
+        window.open(githubUploadUrl, '_blank');
+        alert("I've opened your GitHub 'Global Folder'. \n\nJust drag your songs there and click 'Commit' to share them with the world!");
+    }
+
     saveFilesBtn.style.display = 'none';
     pendingFiles = [];
+    updateTrackList();
 });
 
 
