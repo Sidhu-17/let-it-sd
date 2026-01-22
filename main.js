@@ -1,13 +1,40 @@
-// Public Library - Songs here are visible to EVERYONE visiting your site.
-// To add: Upload to 'music' folder on GitHub and add entry here.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+/**
+ * 🛰️ GLOBAL CLOUD CONFIGURATION
+ * Paste your Firebase Config below to activate global sharing!
+ */
+const firebaseConfig = {
+    apiKey: "PASTE_YOUR_API_KEY_HERE",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "...",
+    appId: "..."
+};
+
+// Initialize Firebase
+let db, storage;
+let isCloudActive = false;
+
+if (firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE") {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    storage = getStorage(app);
+    isCloudActive = true;
+}
+
+// Public Library (Hardcoded GitHub Tracks)
 const publicTracks = [
-    // Example: { name: "Lost in Space", artist: "Nebula", url: "music/lost-in-space.mp3" },
+    // 🎵 ADD YOUR SONGS HERE TO SHARE WITH EVERYONE!
+    // Format: { name: "Song Name", artist: "Your Name", url: "music/your-file.mp3" },
+    { name: "Welcome to Let It SD", artist: "System", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
 ];
 
-// NOTE: Songs uploaded by users via the UI are saved in THEIR OWN browser (IndexedDB).
-// They are NOT shared with other users. Only the songs in publicTracks are shared.
-
 const files = [];
+let currentLibraryTab = 'public'; // 'public' or 'private'
 let currentTrackIndex = -1;
 let isPlaying = false;
 let audioContext, analyser, dataArray, canvas, canvasCtx, animationId;
@@ -25,18 +52,33 @@ const trackTitle = document.getElementById('trackTitle');
 const trackArtist = document.getElementById('trackArtist');
 const volumeBar = document.getElementById('volumeBar');
 const trackArt = document.getElementById('trackArt');
-const trackCountEl = document.getElementById('trackCount');
+const tabGlobal = document.getElementById('tabGlobal');
+const tabPrivate = document.getElementById('tabPrivate');
+const uploadOverlay = document.getElementById('uploadOverlay');
+const uploadProgressBar = document.getElementById('uploadProgressBar');
+const uploadStatus = document.getElementById('uploadStatus');
 canvas = document.getElementById('visualizer');
 canvasCtx = canvas.getContext('2d');
+
+// Tab Switching Logic
+tabGlobal.addEventListener('click', () => switchTab('public'));
+tabPrivate.addEventListener('click', () => switchTab('private'));
+
+function switchTab(tab) {
+    currentLibraryTab = tab;
+    tabGlobal.classList.toggle('active', tab === 'public');
+    tabPrivate.classList.toggle('active', tab === 'private');
+    updateTrackList();
+}
 
 // Initialize Visualizer
 function initVisualizer() {
     if (audioContext) return;
 
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaElementSource(audioElement);
     analyser = audioContext.createAnalyser();
 
+    const source = audioContext.createMediaElementSource(audioElement);
     source.connect(analyser);
     analyser.connect(audioContext.destination);
 
@@ -60,11 +102,11 @@ function draw() {
     for (let i = 0; i < dataArray.length; i++) {
         barHeight = dataArray[i] / 2;
 
-        const r = 139 + (i * 2);
-        const g = 92;
-        const b = 246;
+        const gradient = canvasCtx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#8b5cf6');
+        gradient.addColorStop(1, '#ec4899');
 
-        canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+        canvasCtx.fillStyle = gradient;
         canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
 
         x += barWidth + 1;
@@ -74,14 +116,18 @@ function draw() {
 // Handle File Selection
 fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
+// Drag & Drop
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
 });
 
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('dragover');
-});
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+dropZone.addEventListener('dragenter', () => dropZone.classList.add('dragover'));
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -95,45 +141,57 @@ let pendingFiles = [];
 // IndexedDB Setup for Persistent Storage
 const dbName = "LetItSD_DB";
 const storeName = "songs";
-let db;
+let localDb;
 
 const request = indexedDB.open(dbName, 1);
 request.onupgradeneeded = (e) => {
-    db = e.target.result;
-    if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName, { keyPath: "id" });
+    localDb = e.target.result;
+    if (!localDb.objectStoreNames.contains(storeName)) {
+        localDb.createObjectStore(storeName, { keyPath: "id" });
     }
 };
 request.onsuccess = (e) => {
-    db = e.target.result;
+    localDb = e.target.result;
     initApp();
 };
 
 async function initApp() {
-    // 1. Load Public Tracks first
+    // 1. Load Public Tracks (This makes them visible to EVERYONE)
     publicTracks.forEach(track => {
         files.push({
             id: 'public-' + Math.random(),
             name: track.name,
-            artist: track.artist,
+            artist: track.artist || 'Let It SD Artist',
             url: track.url,
             isPublic: true,
-            size: 'Public'
+            size: 'Featured'
         });
     });
 
-    // 2. Load Saved Tracks from IndexedDB
-    const tx = db.transaction(storeName, "readonly");
+    // 2. Load Private Saved Tracks (Only for the current user)
+    loadSavedTracksFromDB();
+
+    // 3. Optional: Sync from Cloud (If you decide to add Firebase later)
+    if (isCloudActive) {
+        syncGlobalTracks();
+    }
+}
+
+function loadSavedTracksFromDB() {
+    const tx = localDb.transaction(storeName, "readonly");
     const store = tx.objectStore(storeName);
     const getAllRequest = store.getAll();
 
     getAllRequest.onsuccess = () => {
         const savedTracks = getAllRequest.result;
         savedTracks.forEach(track => {
-            files.push({
-                ...track,
-                url: URL.createObjectURL(track.blob)
-            });
+            if (!files.find(f => f.id === track.id)) {
+                files.push({
+                    ...track,
+                    url: URL.createObjectURL(track.blob),
+                    isPublic: false
+                });
+            }
         });
 
         updateTrackList();
@@ -141,6 +199,29 @@ async function initApp() {
             loadTrack(0);
         }
     };
+}
+
+function syncGlobalTracks() {
+    const q = query(collection(db, "global_tracks"), orderBy("timestamp", "desc"));
+    onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+                const data = change.doc.data();
+                if (!files.find(f => f.id === change.doc.id)) {
+                    files.push({
+                        id: change.doc.id,
+                        name: data.name,
+                        artist: data.artist || 'Global User',
+                        url: data.url,
+                        isPublic: true,
+                        isHardcoded: false,
+                        size: data.size
+                    });
+                }
+            }
+        });
+        updateTrackList();
+    });
 }
 
 function handleFiles(selectedFiles) {
@@ -160,23 +241,73 @@ function handleFiles(selectedFiles) {
             name: file.name.replace(/\.[^/.]+$/, ""),
             size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
             url: URL.createObjectURL(file),
-            file: file
+            file: file,
+            isPublic: false
         };
         files.push(track);
     }
-    updateTrackList();
+
+    // Auto switch to private tab to show uploaded tracks
+    switchTab('private');
+
     if (currentTrackIndex === -1 && files.length > 0) {
-        loadTrack(0);
+        loadTrack(files.length - 1);
     }
 }
 
 saveFilesBtn.addEventListener('click', async () => {
-    for (const file of pendingFiles) {
-        await saveTrackToDB(file);
+    const choice = confirm("Do you want to share these songs GLOBALLY with the world?\n\n- OK: Share with everyone (Cloud)\n- Cancel: Keep private in this browser");
+
+    if (choice) {
+        if (!isCloudActive) {
+            alert("Firebase not configured! Please paste your config in main.js first.");
+            return;
+        }
+        for (const file of pendingFiles) {
+            await uploadToCloud(file);
+        }
+    } else {
+        for (const file of pendingFiles) {
+            await saveTrackToDB(file);
+        }
+        alert("Songs saved to your Private Storage.");
     }
+
     saveFilesBtn.style.display = 'none';
-    alert("Songs saved permanently to your browser library! They will stay here even if you refresh.");
+    pendingFiles = [];
 });
+
+async function uploadToCloud(file) {
+    uploadOverlay.style.display = 'flex';
+    const storageRef = ref(storage, 'music/' + Date.now() + '_' + file.name);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    return new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                uploadProgressBar.style.width = progress + '%';
+                uploadStatus.textContent = `Uploading: ${Math.round(progress)}%`;
+            },
+            (error) => {
+                console.error(error);
+                uploadOverlay.style.display = 'none';
+                reject(error);
+            },
+            async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                await addDoc(collection(db, "global_tracks"), {
+                    name: file.name.replace(/\.[^/.]+$/, ""),
+                    url: downloadURL,
+                    size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+                    timestamp: Date.now()
+                });
+                uploadOverlay.style.display = 'none';
+                resolve();
+            }
+        );
+    });
+}
 
 async function saveTrackToDB(trackFile) {
     const track = {
@@ -187,109 +318,152 @@ async function saveTrackToDB(trackFile) {
         timestamp: Date.now()
     };
 
-    const tx = db.transaction(storeName, "readwrite");
+    const tx = localDb.transaction(storeName, "readwrite");
     tx.objectStore(storeName).add(track);
 }
 
 function updateTrackList() {
-    trackCountEl.textContent = `${files.length} tracks`;
-    if (files.length === 0) {
-        trackList.innerHTML = '<div class="empty-state"><p>Your library is empty</p></div>';
+    trackList.innerHTML = '';
+
+    const filteredTracks = files.filter(f => currentLibraryTab === 'public' ? f.isPublic : !f.isPublic);
+
+    if (filteredTracks.length === 0) {
+        trackList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-music"></i>
+                <p>${currentLibraryTab === 'public' ? 'No global hits yet.' : 'Your private library is empty.'}</p>
+            </div>
+        `;
         return;
     }
 
-    trackList.innerHTML = files.map((track, index) => `
-        <div class="track-item ${index === currentTrackIndex ? 'active' : ''}" onclick="loadTrack(${index})">
-            <i class="fa-solid ${index === currentTrackIndex && isPlaying ? 'fa-volume-high' : 'fa-play'}"></i>
+    filteredTracks.forEach((track, index) => {
+        const originalIndex = files.indexOf(track);
+        const div = document.createElement('div');
+        div.className = `track-item ${originalIndex === currentTrackIndex ? 'active' : ''}`;
+        div.innerHTML = `
             <div class="track-info">
-                <span class="t-name">${track.name}</span>
-                <span class="t-size">${track.size}</span>
+                <div class="track-name">${track.name}</div>
+                <div class="track-meta">${track.artist || 'Unknown Artist'} • ${track.size}</div>
             </div>
-        </div>
-    `).join('');
+            <i class="fa-solid ${originalIndex === currentTrackIndex && isPlaying ? 'fa-pause' : 'fa-play'}"></i>
+        `;
+        div.onclick = () => {
+            if (originalIndex === currentTrackIndex) {
+                togglePlay();
+            } else {
+                loadTrack(originalIndex);
+                playTrack();
+            }
+        };
+        trackList.appendChild(div);
+    });
 }
 
 function loadTrack(index) {
     if (index < 0 || index >= files.length) return;
-
-    // Revoke old URL if switching
-    if (currentTrackIndex !== -1 && files[currentTrackIndex].url) {
-        // Optional: URL.revokeObjectURL(files[currentTrackIndex].url);
-    }
 
     currentTrackIndex = index;
     const track = files[index];
 
     audioElement.src = track.url;
     trackTitle.textContent = track.name;
-    trackArtist.textContent = 'User Upload';
+    trackArtist.textContent = track.artist || 'Unknown Artist';
+
+    if (track.url.startsWith('blob:')) {
+        trackArt.innerHTML = '<i class="fa-solid fa-cloud-arrow-up" style="color: var(--primary)"></i>';
+    } else {
+        trackArt.innerHTML = '<i class="fa-solid fa-music"></i>';
+    }
 
     updateTrackList();
-    playTrack();
+
+    audioElement.onloadedmetadata = () => {
+        durationEl.textContent = formatTime(audioElement.duration);
+        progressBar.max = audioElement.duration;
+    };
+}
+
+function togglePlay() {
+    if (files.length === 0) return;
+    if (isPlaying) {
+        pauseTrack();
+    } else {
+        playTrack();
+    }
 }
 
 function playTrack() {
     initVisualizer();
-    if (audioContext && audioContext.state === 'suspended') {
+    if (audioContext.state === 'suspended') {
         audioContext.resume();
     }
-    audioElement.play().catch(e => console.error("Playback failed:", e));
+    audioElement.play();
     isPlaying = true;
     playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-    trackArt.classList.add('playing');
+    updateTrackList();
 }
 
 function pauseTrack() {
     audioElement.pause();
     isPlaying = false;
     playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-    trackArt.classList.remove('playing');
+    updateTrackList();
 }
 
 // Controls
-playPauseBtn.addEventListener('click', () => {
-    if (currentTrackIndex === -1) return;
-    if (isPlaying) pauseTrack();
-    else playTrack();
-});
+playPauseBtn.onclick = togglePlay;
 
-document.getElementById('prevBtn').addEventListener('click', () => {
-    if (currentTrackIndex > 0) loadTrack(currentTrackIndex - 1);
-});
+document.getElementById('prevBtn').onclick = () => {
+    let newIndex = currentTrackIndex - 1;
+    if (newIndex < 0) newIndex = files.length - 1;
+    loadTrack(newIndex);
+    playTrack();
+};
 
-document.getElementById('nextBtn').addEventListener('click', () => {
-    if (currentTrackIndex < files.length - 1) loadTrack(currentTrackIndex + 1);
-});
+document.getElementById('nextBtn').onclick = () => {
+    let newIndex = (currentTrackIndex + 1) % files.length;
+    loadTrack(newIndex);
+    playTrack();
+};
 
-// Audio Progress
-audioElement.addEventListener('timeupdate', () => {
-    const progress = (audioElement.currentTime / audioElement.duration) * 100;
-    progressBar.value = isFinite(progress) ? progress : 0;
-
+audioElement.ontimeupdate = () => {
+    progressBar.value = audioElement.currentTime;
     currentTimeEl.textContent = formatTime(audioElement.currentTime);
-    durationEl.textContent = formatTime(audioElement.duration);
-});
+};
 
-progressBar.addEventListener('input', () => {
-    const time = (progressBar.value / 100) * audioElement.duration;
-    audioElement.currentTime = time;
-});
+progressBar.oninput = () => {
+    audioElement.currentTime = progressBar.value;
+};
 
-volumeBar.addEventListener('input', () => {
+volumeBar.oninput = () => {
     audioElement.volume = volumeBar.value;
-});
+};
 
-audioElement.addEventListener('ended', () => {
-    if (currentTrackIndex < files.length - 1) {
-        loadTrack(currentTrackIndex + 1);
-    } else {
-        pauseTrack();
-    }
-});
+audioElement.onended = () => {
+    let newIndex = (currentTrackIndex + 1) % files.length;
+    loadTrack(newIndex);
+    playTrack();
+};
 
 function formatTime(seconds) {
     if (isNaN(seconds)) return "0:00";
-    const min = Math.floor(seconds / 60);
-    const sec = Math.floor(seconds % 60);
-    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
+
+/**
+ * GLOBAL SHARING (FIREBASE)
+ * Once you have your Firebase config, paste it below to enable Global Uploads!
+ */
+/*
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "...",
+  appId: "..."
+};
+*/
